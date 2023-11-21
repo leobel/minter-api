@@ -3,7 +3,7 @@ import { CoinSelectionWallet } from './wallet/coin-selection-wallet';
 import { Address, AssetName, Assets, AuxiliaryData, BaseAddress, BigNum, Bip32PrivateKey, Bip32PublicKey, ByronAddress, Certificate, Certificates, DataCost, DataHash, Ed25519KeyHash, Ed25519Signature, EnterpriseAddress, GeneralTransactionMetadata, hash_auxiliary_data, hash_plutus_data, hash_transaction, Int, LinearFee, make_vkey_witness, MetadataList, MetadataMap, Mint, MintAssets, min_ada_for_output, min_fee, MultiAsset, NativeScript, NativeScripts, NetworkInfo, PlutusData, PlutusList, PrivateKey, PublicKey, ScriptAll, ScriptAny, ScriptHash, ScriptNOfK, ScriptPubkey, StakeCredential, StakeDelegation, TimelockExpiry, TimelockStart, Transaction, TransactionBody, TransactionBuilder, TransactionBuilderConfigBuilder, TransactionHash, TransactionInput, TransactionInputs, TransactionMetadatum, TransactionOutput, TransactionOutputs, TransactionWitnessSet, Value, Vkeywitnesses, BigInt, ConstrPlutusData, hash_script_data, Redeemers, TxBuilderConstants, PlutusScripts, PlutusScript, Redeemer, RedeemerTag, ExUnits, Ed25519KeyHashes, Languages, UnitInterval, ScriptRef, FixedTransaction, RewardAddress, TransactionUnspentOutput, TxInputsBuilder, min_script_fee, ExUnitPrices } from '@emurgo/cardano-serialization-lib-nodejs';
 import { Mainnet } from './config/network.config';
 import { TokenWallet } from './wallet/token-wallet';
-import { ApiCoinSelectionChange, ApiCoinSelectionInputs, WalletsAssetsAvailable, WalletswalletIdpaymentfeesAmountUnitEnum, WalletswalletIdpaymentfeesPayments } from './models';
+import { ApiCoinSelectionChange, ApiCoinSelectionInputs, WalletsAssetsAvailable, WalletswalletIdpaymentfeesAmount, WalletswalletIdpaymentfeesAmountUnitEnum, WalletswalletIdpaymentfeesPayments } from './models';
 import { AssetWallet } from './wallet/asset-wallet';
 import { Script } from './models/script.model';
 import { JsonScript, ScriptTypeEnum, scriptTypes } from './models/json-script.model';
@@ -447,7 +447,7 @@ export class Seed {
         scripts: NativeScript[],
         signingKeys: PrivateKey[],
         requirePolicyKeys: Ed25519KeyHash[],
-        plutusScripts: { purpose: RedeemerTag, script: PlutusScript, exUnits: ExUnits, index: number, scriptRef?: { hash: string, index: number }, inputData?: any, ctr?: number, data?: any }[] = [],
+        plutusScripts: { purpose: RedeemerTag, script: PlutusScript, exUnits: ExUnits, index: number, scriptRef?: { hash: string, index: number }, inputData?: any, ctrIndex?: number, data?: any }[] = [],
         collateralInputs: TransactionUnspentOutput[] = [],
         opts: { [key: string]: any } = {
             changeAddress: '',
@@ -641,7 +641,7 @@ export class Seed {
             }
 
             for (let i = 0; i < plutusScripts.length; i++) {
-                const { purpose, script, index, scriptRef, exUnits, data, inputData, ctr } = plutusScripts[i];
+                const { purpose, script, index, scriptRef, exUnits, data, inputData, ctrIndex } = plutusScripts[i];
                 languages.add(script.language_version());
                 if (scriptRef) {
                     referenceInputs.add(TransactionInput.new(
@@ -651,7 +651,7 @@ export class Seed {
                 } else {
                     smartContracts.add(script);
                 }
-                const redeemer = Seed.buildRedeemer(purpose, index, exUnits, ctr || 0, data);
+                const redeemer = Seed.buildRedeemer(purpose, index, exUnits, ctrIndex || 0, data);
                 redeemers.add(redeemer);
                 if (inputData) { // datum for spending script
                     const pData = PlutusData.from_hex(inputData);
@@ -1707,6 +1707,26 @@ export class Seed {
             "assets": assets,
             "index": index
         }
+    }
+
+    static coinSelectionInputToUtxos(inputs: ApiCoinSelectionInputs[]): TransactionUnspentOutput[] {
+        const utxos = [];
+        for (const { id, index, address, amount, assets } of inputs) {
+            const txInput = TransactionInput.new(TransactionHash.from_hex(id), index);
+            const addr = Seed.getAddress(address);
+            const value = Seed.getValue(amount, assets);
+            const txOutput = TransactionOutput.new(addr, value);
+            utxos.push(TransactionUnspentOutput.new(txInput, txOutput));
+        }
+        return utxos;
+    }
+
+    static getValue(amount: WalletswalletIdpaymentfeesAmount, assets?: WalletsAssetsAvailable[]): Value {
+        if (assets) {
+            return Value.new_with_assets(toBigNum(amount.quantity), Seed.buildMultiAssets(assets));
+        } else {
+            return Value.new(toBigNum(amount.quantity));
+        } 
     }
 
     static cborEncodeAmount(amount: any) {

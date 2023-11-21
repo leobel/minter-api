@@ -48,7 +48,7 @@ export async function createScript(data: CreateScriptDto){
         })
     }
 
-    const userTokenLabel = TOKEN_LABES[label] || label444 ;
+    const userTokenLabel = TOKEN_LABES[label] || label444;
     const validator: SpendingValidator = buildValidator(userTokenLabel, sPolicy);
     const referenceAddress = lucid.utils.validatorToAddress(validator);
     const validatorScriptHash = lucid.utils.validatorToScriptHash(validator);

@@ -1,4 +1,4 @@
-export interface BuildTxData {
+export interface MintTokenData {
     script: {
         policy_id: string;
         signers: string[];
