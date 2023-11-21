@@ -101,14 +101,13 @@ export class MultisigTransaction {
                 // console.log('Each change decrease their revenue by:', feeDiffPerChange);
                 outs = changes.map(ch => {
                     const address = Seed.getAddress(ch.address);
-                    ch.amount.quantity -= feeDiffPerChange;
-                    if (ch.amount.quantity < 0) {
+                    const quantity = ch.amount.quantity - feeDiffPerChange;
+                    if (quantity < 0) {
                         throw new Error('not enough funds');
                     }
-                    if (ch.amount.quantity < Seed.getMinUtxoValue(address, config)) {
+                    if (quantity < Seed.getMinUtxoValue(address, config)) {
                         return null;
                     }
-                    const quantity = ch.amount.quantity;
                     txCost += quantity;
                     let amount = Value.new(
                         BigNum.from_str(quantity.toString())
