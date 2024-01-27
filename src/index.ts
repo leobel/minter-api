@@ -6,6 +6,7 @@ import cors from 'cors';
 import { createScript } from './services/create-script';
 import { signTx } from './services/crypto';
 import { updateToken } from './services/token-update';
+import { burnToken } from './services/token-burn';
 
 //For env File 
 dotenv.config();
@@ -22,6 +23,11 @@ app.get('/', (req: Request, res: Response) => {
 
 app.post('/mintToken', async (req: Request, res: Response) => {
   const build = await mintToken(req.body);
+  res.json(build);
+});
+
+app.post('/burnToken', async (req: Request, res: Response) => {
+  const build = await burnToken(req.body);
   res.json(build);
 });
 

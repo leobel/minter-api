@@ -50,7 +50,7 @@ export async function getLatestBlock(url: string, key: string): Promise<number> 
     return response.data.slot;
 }
 
-export async function getRefenceTokenInfo(url: string, key: string, asset: string): Promise<{tx_hash: string, index: number, amount: { quantity: number, unit: WalletswalletIdpaymentfeesAmountUnitEnum }, datum: string}> {
+export async function getRefenceTokenInfo(url: string, key: string, asset: string, withDatum = true): Promise<{address: string, tx_hash: string, index: number, amount: { quantity: number, unit: WalletswalletIdpaymentfeesAmountUnitEnum }, datum: string}> {
     // get last transaction
     let response = await axios.get(`${url}/assets/${asset}/transactions`, {
         headers: {
@@ -70,19 +70,23 @@ export async function getRefenceTokenInfo(url: string, key: string, asset: strin
 
     const utxos = response.data.outputs;
     const utxo = utxos.find((tx: any) => tx.amount.some((a: any) => a.unit == asset));
+    const address = utxo.address;
     const index = utxo.output_index;
     const amount = utxo.amount.find((a: any) => a.unit == WalletswalletIdpaymentfeesAmountUnitEnum.Lovelace);
 
     // get datum cbor
-    response = await axios.get(`${url}/scripts/datum/${utxo.data_hash}/cbor`, {
-        headers: {
-            'project_id': key
-        }
-    });
+    let datum = undefined;
+    if (withDatum) {
+        
+        response = await axios.get(`${url}/scripts/datum/${utxo.data_hash}/cbor`, {
+            headers: {
+                'project_id': key
+            }
+        });
+        datum = response.data.cbor;
+    }
 
-    const datum = response.data.cbor;
-
-    return { tx_hash, index, amount, datum };
+    return { address, tx_hash, index, amount, datum };
 }
 
 export function signTx(data: SignTxData) {
@@ -96,6 +100,7 @@ export function signTx(data: SignTxData) {
             for (let i = 0; i < vkeys.len(); i++) {
                 const key = vkeys.get(i);
                 const hash = key.vkey().public_key().hash().to_hex();
+                const signature = key.signature().to_hex();
                 if (!keys.has(hash)) {
                     keys.add(hash);
                     ws.add(key);
