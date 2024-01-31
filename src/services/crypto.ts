@@ -118,6 +118,18 @@ export function signTx(data: SignTxData) {
     return isValid ? Buffer.from(signTx!.to_bytes()).toString('hex') : null;
 }
 
+export function parseInputs(payments: string[]):  Map<string, TransactionUnspentOutput> {
+    const inputs: Map<string, TransactionUnspentOutput> = new Map();
+    for (let d of payments) {
+        const utxo = TransactionUnspentOutput.from_bytes(Buffer.from(d, 'hex'));
+        const key = `${utxo.input().transaction_id().to_hex()}#${utxo.input().index()}`;
+        if (!inputs.has(key)) {
+            inputs.set(key, utxo);
+        }
+    }
+    return inputs;
+}
+
 export function calculateInputs(inputs: TransactionUnspentOutput[], network: any) {
     let total = 0;
     let remaining = 0;

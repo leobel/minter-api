@@ -8,7 +8,7 @@ import { AssetWallet } from "../wallet/asset-wallet";
 import { ApiCoinSelectionChange, WalletswalletIdpaymentfeesAmountUnitEnum, WalletswalletIdpaymentfeesPayments } from "../models";
 import { SignTxData } from '../models/sign-tx.dto';
 import { MultisigTransaction } from '../models/multisig-transaction';
-import { calculateInputs, decrypt, encrypt, getExUnits, getLatestBlock, getMaxExUnits } from './crypto';
+import { calculateInputs, decrypt, encrypt, getExUnits, getLatestBlock, getMaxExUnits, parseInputs } from './crypto';
 
 
 export async function mintToken(data: MintTokenData) {
@@ -33,7 +33,7 @@ export async function mintToken(data: MintTokenData) {
     };
 
     // get inputs
-    const inputs = payments.map(d => TransactionUnspentOutput.from_bytes(Buffer.from(d, 'hex')));
+    const inputs = Array.from(parseInputs(payments).values());
 
     // get outputs
     const outputs: WalletswalletIdpaymentfeesPayments[] = [];

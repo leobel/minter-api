@@ -2,7 +2,7 @@ import { Ed25519KeyHash, ExUnits, NativeScript, PlutusScript, PrivateKey, Redeem
 import { UpdateTokenData } from "../models/token-update.dto";
 import { ApiCoinSelectionChange, ApiCoinSelectionInputs, WalletswalletIdpaymentfeesAmountUnitEnum, WalletswalletIdpaymentfeesPayments } from "../models";
 import { Mainnet, Testnet } from "../config/network.config";
-import { calculateInputs, encrypt, getExUnits, getLatestBlock, getMaxExUnits, getRefenceTokenInfo, sortInputs } from "./crypto";
+import { calculateInputs, encrypt, getExUnits, getLatestBlock, getMaxExUnits, getRefenceTokenInfo, parseInputs, sortInputs } from "./crypto";
 import { CIP68_REFERENCE_PREFIX, Seed } from "../utils";
 import { TokenWallet } from "../wallet/token-wallet";
 import { AssetWallet } from "../wallet/asset-wallet";
@@ -23,7 +23,7 @@ export async function updateToken(data: UpdateTokenData) {
     };
 
     // get inputs
-    let inputs = payments.map(d => TransactionUnspentOutput.from_bytes(Buffer.from(d, 'hex')));
+    let inputs = Array.from(parseInputs(payments).values());
 
     // get outputs
     const outputs: WalletswalletIdpaymentfeesPayments[] = [];

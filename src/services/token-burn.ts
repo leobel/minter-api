@@ -8,7 +8,7 @@ import { AssetWallet } from "../wallet/asset-wallet";
 import { ApiCoinSelectionChange, ApiCoinSelectionInputs, WalletswalletIdpaymentfeesAmountUnitEnum, WalletswalletIdpaymentfeesPayments } from "../models";
 import { SignTxData } from '../models/sign-tx.dto';
 import { MultisigTransaction } from '../models/multisig-transaction';
-import { calculateInputs, decrypt, encrypt, getExUnits, getLatestBlock, getMaxExUnits, getRefenceTokenInfo, sortInputs } from './crypto';
+import { calculateInputs, decrypt, encrypt, getExUnits, getLatestBlock, getMaxExUnits, getRefenceTokenInfo, parseInputs, sortInputs } from './crypto';
 
 
 export async function burnToken(data: BurnTokenData) {
@@ -28,7 +28,7 @@ export async function burnToken(data: BurnTokenData) {
     };
 
     // get inputs
-    let inputs = payments.map(d => TransactionUnspentOutput.from_bytes(Buffer.from(d, 'hex')));
+    let inputsMap = parseInputs(payments);
 
     // get outputs
     const outputs: WalletswalletIdpaymentfeesPayments[] = [];
@@ -47,8 +47,10 @@ export async function burnToken(data: BurnTokenData) {
 
     // get total input, remaining and outputs
     // buyer assets that where sent to us
-    let { total, outputs: tokenOutputs } = calculateInputs(inputs, configNetwork);
-
+    let { total, remaining, outputs: tokenOutputs } = calculateInputs(Array.from(inputsMap.values()), configNetwork);
+    console.log('Initital total:', total);
+    console.log('Initial remaining:', remaining);
+    
     outputs.push(...tokenOutputs);
 
     // plutus script section 
@@ -75,8 +77,10 @@ export async function burnToken(data: BurnTokenData) {
         const cip68user_name = CIP68_RNFT_PREFIX + Buffer.from(t.asset_name, 'utf-8').toString('hex');
         let unit = policyId + cip68ref_name;
         const { tx_hash, index, amount, datum } = await getRefenceTokenInfo(blockfrostUrl, blockfrostKey, unit);
-        total += Number(amount.quantity);
         referenceTokensInputs.push({ hash: tx_hash, index, datum });
+        let key = `${tx_hash}#${index}`;
+        total += Number(amount.quantity);
+        remaining += Number(amount.quantity);
         const refTokenInput: ApiCoinSelectionInputs = { // ref Token
             "id": tx_hash,
             "index": index,
@@ -90,24 +94,32 @@ export async function burnToken(data: BurnTokenData) {
                 }
             ],
         };
+        inputsMap.set(key, Seed.coinSelectionInputToUtxos([refTokenInput])[0]);
         unit = policyId + cip68user_name;
         const { address, tx_hash: uTx_hash, index: uIndex, amount: uAmount } = await getRefenceTokenInfo(blockfrostUrl, blockfrostKey, unit, false);
-        total += Number(uAmount.quantity);
-        const userTokenInput: ApiCoinSelectionInputs = { // user Token
-            "id": uTx_hash,
-            "index": uIndex,
-            "amount": uAmount,
-            "address": address,
-            "assets": [
-                {
-                    "policy_id": policyId,
-                    "asset_name": cip68user_name,
-                    "quantity": 1
-                }
-            ],
-        };
-        inputs.push(...Seed.coinSelectionInputToUtxos([userTokenInput, refTokenInput]));
-
+        key = `${uTx_hash}#${uIndex}`;
+        if (!inputsMap.has(key)) { // could be already in the inputs coming from wallet payments
+            remaining += Number(uAmount.quantity);
+            total += Number(uAmount.quantity);
+            const userTokenInput: ApiCoinSelectionInputs = { // user Token
+                "id": uTx_hash,
+                "index": uIndex,
+                "amount": uAmount,
+                "address": address,
+                "assets": [
+                    {
+                        "policy_id": policyId,
+                        "asset_name": cip68user_name,
+                        "quantity": 1
+                    }
+                ],
+            };
+            inputsMap.set(key, Seed.coinSelectionInputToUtxos([userTokenInput])[0]);
+        } else { // if already in the inputs, we need to remove it from the outputs
+            const i = outputs.findIndex(out => out.assets?.some(asset => asset.policy_id + asset.asset_name == unit));
+            remaining += outputs[i].amount.quantity;
+            outputs.splice(i, 1);
+        }
 
         assets.push(new TokenWallet(
             new AssetWallet(policyId, cip68user_name, -1),
@@ -123,7 +135,7 @@ export async function burnToken(data: BurnTokenData) {
     }
 
     // add script based on reference tokens final position on inputs
-    inputs = sortInputs(inputs);
+    const inputs = sortInputs(Array.from(inputsMap.values()));
     for (let { hash, index, datum } of referenceTokensInputs) {
         const i = inputs.findIndex(t => {
             const input = t.input();
@@ -142,10 +154,11 @@ export async function burnToken(data: BurnTokenData) {
 
     // add total as change. Tx fee will be deducted from here
     console.log('Total:', total);
+    console.log('Remaining:', remaining);
     change.push({
         "address": change_address,
         "amount": {
-            "quantity": total,
+            "quantity": remaining,
             "unit": WalletswalletIdpaymentfeesAmountUnitEnum.Lovelace
         },
         "assets": []
@@ -162,7 +175,7 @@ export async function burnToken(data: BurnTokenData) {
     const ttl = slot + 86400; // 24h, needs to be less than 36 hours to avoid possible parameters changes
     let tx = Seed.buildTransactionMultisig(total, inputs, outputs, change, ttl, assets, scripts, signingKeys, requirePolicyKeys, plutusScripts, collateral, buildOpts);
     let signed = tx.build();
-
+    
     try {
         // adjust redeemer exUnits
         const maxMintExUnits = await getExUnits(blockfrostUrl, blockfrostKey, signed);

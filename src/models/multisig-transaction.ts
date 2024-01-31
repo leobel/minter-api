@@ -176,6 +176,7 @@ export class MultisigTransaction {
                 txFee += remaining; // avoid ValueNotConservedUTxO, so add remaining to fee;
                 // console.log(`There is remaining (add to final fee): ${remaining}`);
             }
+            console.log('Tx Fee:', txFee);
             const txOutputs = TransactionOutputs.new();
             outs.forEach(txout => txOutputs.add(txout));
             const body = TransactionBody.new(txBody.inputs(), txOutputs, BigNum.from_str(txFee.toString()), txBody.ttl());
