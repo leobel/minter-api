@@ -52,33 +52,35 @@ export async function getLatestBlock(url: string, key: string): Promise<number> 
 
 export async function getRefenceTokenInfo(url: string, key: string, asset: string, withDatum = true): Promise<{address: string, tx_hash: string, index: number, amount: { quantity: number, unit: WalletswalletIdpaymentfeesAmountUnitEnum }, datum: string}> {
     // get last transaction
-    let response = await axios.get(`${url}/assets/${asset}/transactions`, {
+    let response = await axios.get(`${url}/assets/${asset}/addresses`, {
         headers: {
             'project_id': key
         }
     });
-    const txs = response.data;
-    const [tx] = txs.sort((a: any, b: any) => b.block_height - a.block_height);
-    const tx_hash = tx.tx_hash;
+    const [{address}] = response.data;
+
     
     // get transaction utxos
-    response = await axios.get(`${url}/txs/${tx_hash}/utxos`, {
+    response = await axios.get(`${url}/addresses/${address}/utxos/${asset}?order=desc`, {
         headers: {
             'project_id': key
         }
     });
+    const [{tx_hash, output_index: index, amount, data_hash}] = response.data;
+    // const [tx] = txs.sort((a: any, b: any) => b.block_height - a.block_height);
+    // const tx_hash = tx.tx_hash;
 
-    const utxos = response.data.outputs;
-    const utxo = utxos.find((tx: any) => tx.amount.some((a: any) => a.unit == asset));
-    const address = utxo.address;
-    const index = utxo.output_index;
-    const amount = utxo.amount.find((a: any) => a.unit == WalletswalletIdpaymentfeesAmountUnitEnum.Lovelace);
+
+    // const utxos = response.data.outputs;
+    // const utxo = utxos.find((tx: any) => tx.amount.some((a: any) => a.unit == asset));
+    // const address = utxo.address;
+    // const index = utxo.output_index;
+    const quantity = amount.find((a: any) => a.unit == WalletswalletIdpaymentfeesAmountUnitEnum.Lovelace);
 
     // get datum cbor
     let datum = undefined;
     if (withDatum) {
-        
-        response = await axios.get(`${url}/scripts/datum/${utxo.data_hash}/cbor`, {
+        response = await axios.get(`${url}/scripts/datum/${data_hash}/cbor`, {
             headers: {
                 'project_id': key
             }
@@ -86,7 +88,7 @@ export async function getRefenceTokenInfo(url: string, key: string, asset: strin
         datum = response.data.cbor;
     }
 
-    return { address, tx_hash, index, amount, datum };
+    return { address, tx_hash, index, amount: quantity, datum };
 }
 
 export function signTx(data: SignTxData) {
